@@ -52,7 +52,7 @@ class MyRobot(wpilib.TimedRobot):
         sideways = chassis_speeds.vyMetersPerSecond
         angular = chassis_speeds.omegaRadiansPerSecond
         
-        # Apply the speeds to your RobotDriveBase instance (replace with your actual motor controllers)
+        # Apply the speeds to your RobotDriveBase instance (replace with actual motor controllers)
         # For example:
         self.drive.arcadeDrive(forward, angular)
     
