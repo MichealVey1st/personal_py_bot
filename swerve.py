@@ -1,4 +1,5 @@
 import math
+import robot
 
 # Translation2d class representing a 2D translation
 class Translation2d:
@@ -17,6 +18,8 @@ class ChassisSpeeds:
         self.vxMetersPerSecond = vx
         self.vyMetersPerSecond = vy
         self.omegaRadiansPerSecond = omega
+
+    def fromFieldRelativeSpeeds()
 
 # SwerveModuleState class representing the state of a swerve module
 class SwerveModuleState:
@@ -62,15 +65,9 @@ class SwerveDriveKinematics:
 
         return module_states
 
-# Create module location objects
-m_frontLeftLocation = Translation2d(0.381, 0.381)
-m_frontRightLocation = Translation2d(0.381, -0.381)
-m_backLeftLocation = Translation2d(-0.381, 0.381)
-m_backRightLocation = Translation2d(-0.381, -0.381)
-
 # Creating kinematics object using module locations
 m_kinematics = SwerveDriveKinematics(
-    m_frontLeftLocation, m_frontRightLocation, m_backLeftLocation, m_backRightLocation
+    robot.m_frontLeftLocation, robot.m_frontRightLocation, robot.m_backLeftLocation, robot.m_backRightLocation
 )
 
 # Example chassis speeds
