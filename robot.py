@@ -1,66 +1,109 @@
 import wpilib
-from wpilib.drive import RobotDriveBase
-from robotpy_ext.autonomous import StatefulAutonomous, state, timed_state
-from autonomous.drive_forward import DriveForward
+import ctre
+from magicbot import MagicRobot
+from robotpy_ext.autonomous.selector import AutonomousModeSelector
+from networktables import NetworkTables
+from networktables.util import ntproperty
+from components import swervedrive, swervemodule
 
-# Import classes from your swerve.py file
-from swerve import Translation2d, Rotation2d, ChassisSpeeds, SwerveModuleState, SwerveDriveKinematics
 
-class MyRobotDrive(RobotDriveBase):
-    # Define your drive methods here
-    pass
+from collections import namedtuple
+# Get the config preset from the swervemodule
+ModuleConfig = swervemodule.ModuleConfig
 
-class MyRobot(wpilib.TimedRobot):
+class MyRobot(MagicRobot):
 
-    def robotInit(self):
-        # Rest of your robot initialization code
-        
-        # Create module location objects
-        m_frontLeftLocation = Translation2d(0.381, 0.381)
-        m_frontRightLocation = Translation2d(0.381, -0.381)
-        m_backLeftLocation = Translation2d(-0.381, 0.381)
-        m_backRightLocation = Translation2d(-0.381, -0.381)
+    drive: swervedrive.SwerveDrive
 
-        # Creating kinematics object using module locations
-        self.m_kinematics = SwerveDriveKinematics(
-            m_frontLeftLocation, m_frontRightLocation, m_backLeftLocation, m_backRightLocation
-        )
-        
-        # Example chassis speeds
-        self.speeds = ChassisSpeeds(1.0, 3.0, 1.5)
+    frontLeftModule: swervemodule.SwerveModule
+    frontRightModule: swervemodule.SwerveModule
+    rearLeftModule: swervemodule.SwerveModule
+    rearRightModule: swervemodule.SwerveModule
 
-        # Create a RobotDriveBase instance
-        self.drive = MyRobotDrive()  # Replace with your actual RobotDriveBase subclass
-        
-        # Create an autonomous instance
-        self.autonomous = DriveForward(self.drive, self.speeds)  # Replace with actual parameters
+    frontLeftModule_cfg = ModuleConfig(sd_prefix='FrontLeft_Module', zero=2.97, inverted=True, allow_reverse=True)
+    frontRightModule_cfg = ModuleConfig(sd_prefix='FrontRight_Module', zero=2.69, inverted=False, allow_reverse=True)
+    rearLeftModule_cfg = ModuleConfig(sd_prefix='RearLeft_Module', zero=0.18, inverted=True, allow_reverse=True)
+    rearRightModule_cfg = ModuleConfig(sd_prefix='RearRight_Module', zero=4.76, inverted=False, allow_reverse=True)
 
+    def createObjects(self):
+        self.sd = NetworkTables.getTable('SmartDashboard')
+
+        self.gamempad = wpilib.Joystick(0)
+        self.gamempad2 = wpilib.Joystick(1)
+
+        # WPI_TalonFX
+
+        # Drive Motors
+        self.frontLeftModule_driveMotor = ctre.WPI_TalonFX(5)
+        self.frontRightModule_driveMotor = ctre.WPI_TalonFX(8)
+        self.rearLeftModule_driveMotor = ctre.WPI_TalonFX(4)
+        self.rearRightModule_driveMotor = ctre.WPI_TalonFX(9)
+
+        # Rotate Motors
+        self.frontLeftModule_rotateMotor = ctre.WPI_TalonFX(3)
+        self.frontRightModule_rotateMotor = ctre.WPI_TalonFX(14)
+        self.rearLeftModule_rotateMotor = ctre.WPI_TalonFX(2)
+        self.rearRightModule_rotateMotor = ctre.WPI_TalonFX(15)
+
+        # Encoders
+        self.frontLeftModule_encoder = wpilib.AnalogInput(0)
+        self.frontRightModule_encoder = wpilib.AnalogInput(3)
+        self.rearLeftModule_encoder = wpilib.AnalogInput(1)
+        self.rearRightModule_encoder = wpilib.AnalogInput(2)
+
+        # Limit Switch
+        self.switch = wpilib.DigitalInput(0)
+
+        # PDP
+        self.pdp = wpilib.PowerDistributionPanel(0)
+
+    def disabledPeriodic(self):
+        self.update_sd()
+
+    def autonomousInit(self):
+        self.drive.flush()
+        self.drive.threshold_input_vectors = True
+
+    def autonomous(self):
+        super().autonomous()
+
+    def teleopInit(self):
+        self.drive.flush()
+        self.drive.squared_inputs = True
+        self.drive.threshold_input_vectors = True
+    
+    def move(self, x, y, rcw):
+        # velocity in each axis XYZ
+
+        if self.gamempad.getRawButton(3):
+            rcw *= 0.7
+
+        self.drive.move(x, y, rcw)
 
     def teleopPeriodic(self):
-        # Convert chassis speeds to module states
-        module_states = self.m_kinematics.toSwerveModuleStates(self.speeds)
-        
-        # Example optimization
-        current_angle = Rotation2d(0.0)
-        front_left_optimized = SwerveModuleState.optimize(module_states[0], current_angle)
-        
-        # Convert module states to chassis speeds
-        chassis_speeds = self.m_kinematics.toChassisSpeeds(*module_states)
-        
-        # Get individual speeds from chassis speeds
-        forward = chassis_speeds.vxMetersPerSecond
-        sideways = chassis_speeds.vyMetersPerSecond
-        angular = chassis_speeds.omegaRadiansPerSecond
-        
-        # Apply the speeds to your RobotDriveBase instance (replace with actual motor controllers)
-        # For example:
-        self.drive.arcadeDrive(forward, angular)
-    
-    def autonomousInit(self):
-        self.autonomous.start()
+        # drive
+        self.move(self.gamempad.getRawAxis(5), self.gamempad.getRawAxis(4), self.gamempad.getRawAxis(0))
 
-    def autonomousPeriodic(self):
-        self.autonomous.run()
+        #lock
+        if self.gamempad.getRawButton(1):
+            self.drive.request_wheel_lock = True
+
+        #button drive
+        if self.gamempad.getPOV() == 0:
+            self.drive.set_raw_fwd(-0.35)
+        elif self.gamempad.getPOV() == 180:
+            self.drive.set_raw_fwd(0.35)
+        elif self.gamempad.getPOV() == 90:
+            self.drive.set_raw_strafe(0.35)
+        elif self.gamempad.getPOV() == 270:
+            self.drive.set_raw_strafe(-0.35)
+    
+        self.update_sd()
+
+    def update_sd(self):
+        self.drive.update_smartdash()
+        
+
 
 if __name__ == "__main__":
     wpilib.run(MyRobot)
